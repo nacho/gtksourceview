@@ -115,6 +115,7 @@ struct _GtkSourceViewPrivate
 	gboolean	 show_right_margin;
 	guint		 right_margin_pos;
 	gint             cached_right_margin_pos;
+	gint		 cached_line_number_width;
 
 	gboolean	 style_scheme_applied;
 	GtkSourceStyleScheme *style_scheme;
@@ -153,7 +154,11 @@ typedef struct
 	gint priority;
 	GdkPixbuf *pixbuf;
 	GdkColor background;
-	guint background_set;
+	guint background_set : 1;
+
+	GtkSourceViewMarkTooltipFunc tooltip_func;
+	gpointer tooltip_data;
+	GDestroyNotify tooltip_data_notify;
 } MarkCategory;
 
 /* Prototypes. */
@@ -217,8 +222,22 @@ static void	gtk_source_view_get_property		(GObject           *object,
 static void     gtk_source_view_style_set               (GtkWidget         *widget,
 							 GtkStyle          *previous_style);
 static void	gtk_source_view_realize			(GtkWidget         *widget);
+static gboolean gtk_source_view_query_tooltip		(GtkWidget	   *widget,
+							 gint		    x,
+							 gint               y,
+							 gboolean           keyboard_mode,
+							 GtkTooltip        *tooltip);
 static void	gtk_source_view_update_style_scheme	(GtkSourceView     *view);
 
+static MarkCategory *
+		gtk_source_view_get_mark_category	(GtkSourceView     *view,
+							 GtkSourceMark     *mark);
+static MarkCategory *
+		gtk_source_view_lookup_category		(GtkSourceView     *view,
+							 const gchar       *name);
+static MarkCategory *
+		gtk_source_view_ensure_category		(GtkSourceView     *view,
+							 const gchar       *name);
 static MarkCategory *
 		mark_category_new			(gint               priority,
 							 GdkPixbuf         *pixbuf);
@@ -247,6 +266,7 @@ gtk_source_view_class_init (GtkSourceViewClass *klass)
 	widget_class->expose_event = gtk_source_view_expose;
 	widget_class->style_set = gtk_source_view_style_set;
 	widget_class->realize = gtk_source_view_realize;
+	widget_class->query_tooltip = gtk_source_view_query_tooltip;
 
 	textview_class->populate_popup = gtk_source_view_populate_popup;
 	textview_class->move_cursor = gtk_source_view_move_cursor;
@@ -711,6 +731,7 @@ gtk_source_view_init (GtkSourceView *view)
 	view->priv->smart_home_end = GTK_SOURCE_SMART_HOME_END_DISABLED;
 	view->priv->right_margin_pos = DEFAULT_RIGHT_MARGIN_POSITION;
 	view->priv->cached_right_margin_pos = -1;
+	view->priv->cached_line_number_width = 0;
 
 	gtk_text_view_set_left_margin (GTK_TEXT_VIEW (view), 2);
 	gtk_text_view_set_right_margin (GTK_TEXT_VIEW (view), 2);
@@ -1439,6 +1460,7 @@ gtk_source_view_paint_margin (GtkSourceView *view,
 		margin_width = text_width + 4;
 	else
 		margin_width = 0;
+	view->priv->cached_line_number_width = margin_width;
 
 	x_pixmap = margin_width;
 
@@ -1671,16 +1693,16 @@ gtk_source_view_paint_marks_background (GtkSourceView  *view,
 
 		while (marks != NULL)
 		{
-			const gchar *category;
 			MarkCategory *cat = NULL;
-			category = gtk_source_mark_get_category (marks->data);
-			if (category != NULL)
-				cat = g_hash_table_lookup (view->priv->mark_categories, category);
+
+			cat = gtk_source_view_get_mark_category (view, marks->data);
+
 			if (cat != NULL && cat->background_set && cat->priority > priority)
 			{
 				background = &cat->background;
 				priority = cat->priority;
 			}
+
 			marks = g_slist_delete_link (marks, marks);
 		}
 
@@ -2496,6 +2518,11 @@ mark_category_new (gint priority, GdkPixbuf *pixbuf)
 
 	cat = g_slice_new0 (MarkCategory);
 	cat->priority = priority;
+
+	cat->tooltip_func = NULL;
+	cat->tooltip_data = NULL;
+	cat->tooltip_data_notify = NULL;
+
 	if (pixbuf != NULL)
 		cat->pixbuf = g_object_ref (pixbuf);
 	else
@@ -2507,9 +2534,49 @@ mark_category_new (gint priority, GdkPixbuf *pixbuf)
 static void
 mark_category_free (MarkCategory *cat)
 {
+	if (cat->tooltip_data_notify != NULL)
+		cat->tooltip_data_notify (cat->tooltip_data);
 	if (cat->pixbuf)
 		g_object_unref (cat->pixbuf);
 	g_slice_free (MarkCategory, cat);
+}
+
+static MarkCategory *
+gtk_source_view_get_mark_category (GtkSourceView *view,
+				   GtkSourceMark *mark)
+{
+	const gchar *category;
+	category = gtk_source_mark_get_category (mark);
+	if (category)
+		return gtk_source_view_lookup_category (view, category);
+	else
+		return NULL;
+}
+
+static MarkCategory *
+gtk_source_view_lookup_category (GtkSourceView *view,
+				 const gchar   *name)
+{
+	return g_hash_table_lookup (view->priv->mark_categories, name);
+}
+
+static MarkCategory *
+gtk_source_view_ensure_category (GtkSourceView *view,
+				 const gchar   *name)
+{
+	MarkCategory *cat;
+
+	cat = g_hash_table_lookup (view->priv->mark_categories, name);
+
+	if (cat == NULL)
+	{
+		cat = mark_category_new (0, NULL);
+		g_hash_table_insert (view->priv->mark_categories,
+				     g_strdup (name),
+				     cat);
+	}
+
+	return cat;
 }
 
 /**
@@ -2685,6 +2752,83 @@ gtk_source_view_get_mark_category_background (GtkSourceView *view,
 	else
 	{
 		return FALSE;
+	}
+}
+
+/**
+ * gtk_source_view_set_mark_category_tooltip_func:
+ * @view: a #GtkSourceView.
+ * @category: a mark category.
+ * @func: a #GtkSourceViewMarkTooltipFunc or %NULL.
+ * @user_data: user data which will be passed to @func.
+ * @user_data_notify: if not %NULL, it will be called for @user_data when the
+ * @view is destroyed or when gtk_source_view_set_mark_category_tooltip_func()
+ * is called for @category again.
+ *
+ * Set a #GtkSourceViewMarkTooltipFunc used to set tooltip on marks from the
+ * given mark @category. If @func is %NULL then tooltips will not be shown
+ * for marks from @category.
+ *
+ * <informalexample><programlisting>
+ * static gboolean
+ * tooltip_func (GtkSourceMark *mark,
+ *               GtkTooltip    *tooltip,
+ *               gpointer       user_data)
+ * {
+ *   char *text;
+ *   gboolean use_markup;
+ *
+ *   text = get_tooltip_for_mark (mark, user_data, &use_markup);
+ *
+ *   if (text == NULL)
+ *     return FALSE;
+ *
+ *   if (use_markup)
+ *     gtk_tooltip_set_markup (tooltip, text);
+ *   else
+ *     gtk_tooltip_set_text (tooltip, text);
+ *
+ *   return TRUE;
+ * }
+ *
+ * ...
+ *
+ * GtkSourceView *view;
+ *
+ * gtk_source_view_set_mark_category_tooltip_func (view, "my-mark", tooltip_func,
+ *                                                 g_strdup ("a string"), g_free);
+ * gtk_source_view_set_mark_category_tooltip_func (view, "other-mark", tooltip_func,
+ *                                                 NULL, NULL);
+ * </programlisting></informalexample>
+ *
+ * Since: 2.4
+ */
+void
+gtk_source_view_set_mark_category_tooltip_func (GtkSourceView   *view,
+						const gchar     *category,
+						GtkSourceViewMarkTooltipFunc func,
+						gpointer	 user_data,
+						GDestroyNotify   user_data_notify)
+{
+	MarkCategory *cat;
+
+	g_return_if_fail (GTK_IS_SOURCE_VIEW (view));
+	g_return_if_fail (category != NULL);
+
+	cat = gtk_source_view_ensure_category (view, category);
+
+	if (cat->tooltip_data_notify)
+		cat->tooltip_data_notify (cat->tooltip_data);
+
+	cat->tooltip_func = func;
+	cat->tooltip_data = user_data;
+	cat->tooltip_data_notify = user_data_notify;
+
+	if (func != NULL)
+	{
+		gtk_widget_set_has_tooltip (GTK_WIDGET (view), TRUE);
+		if (GTK_WIDGET_REALIZED (view))
+			gtk_widget_trigger_tooltip_query (GTK_WIDGET (view));
 	}
 }
 
@@ -3392,6 +3536,77 @@ gtk_source_view_button_press_event (GtkWidget *widget, GdkEventButton *event)
 	}
 
 	return GTK_WIDGET_CLASS (gtk_source_view_parent_class)->button_press_event (widget, event);
+}
+
+static gboolean
+gtk_source_view_query_tooltip (GtkWidget  *widget,
+			       gint        x,
+			       gint        y,
+			       gboolean    keyboard_mode,
+			       GtkTooltip *tooltip)
+{
+	GtkTextView *text_view = GTK_TEXT_VIEW (widget);
+	GtkSourceView *view = GTK_SOURCE_VIEW (widget);
+
+	/* Check if we are inside the marker area */
+	/* TODO: when folding is in, correct this */
+	if (x < gtk_text_view_get_border_window_size (text_view, GTK_TEXT_WINDOW_LEFT) &&
+	    x > view->priv->cached_line_number_width)
+	{
+		GtkTextIter line_iter;
+		GSList *marks;
+		GtkSourceBuffer *buffer;
+
+		buffer = GTK_SOURCE_BUFFER (gtk_text_view_get_buffer (text_view));
+		gtk_text_view_get_line_at_y(GTK_TEXT_VIEW (widget),
+					    &line_iter,
+					    y,
+					    NULL);
+		marks = gtk_source_buffer_get_source_marks_at_iter (buffer,
+								    &line_iter,
+								    NULL);
+
+		if (marks != NULL)
+		{
+			GtkSourceViewMarkTooltipFunc tooltip_func = NULL;
+			gpointer tooltip_data = NULL;
+			GtkSourceMark *tooltip_mark = NULL;
+			gint priority = -1;
+
+			while (marks != NULL)
+			{
+				MarkCategory *cat;
+				GtkSourceMark *mark;
+
+				mark = marks->data;
+				cat = gtk_source_view_get_mark_category (view, marks->data);
+
+				if (cat != NULL && cat->priority > priority && cat->tooltip_func != NULL)
+				{
+					tooltip_func = cat->tooltip_func;
+					tooltip_data = cat->tooltip_data;
+					tooltip_mark = mark;
+					priority = cat->priority;
+				}
+
+				marks = g_slist_delete_link (marks, marks);
+			}
+
+			if (tooltip_func != NULL)
+				return tooltip_func (tooltip_mark, tooltip, tooltip_data);
+
+			g_message ("No tooltip");
+		}
+	}
+
+	if (GTK_WIDGET_CLASS (gtk_source_view_parent_class)->query_tooltip != NULL)
+		return GTK_WIDGET_CLASS (gtk_source_view_parent_class)->query_tooltip (widget,
+										       x,
+										       y,
+										       keyboard_mode,
+										       tooltip);
+	else
+		return FALSE;
 }
 
 /**

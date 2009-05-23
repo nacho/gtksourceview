@@ -1180,6 +1180,23 @@ button_press_cb (GtkWidget *widget, GdkEventButton *ev, gpointer user_data)
 
 /* Window creation functions -------------------------------------------------------- */
 
+static gboolean
+mark_tooltip_func (GtkSourceMark *mark,
+		   GtkTooltip    *tooltip,
+		   gpointer	  user_data)
+{
+	GdkPixbuf *pixbuf = user_data;
+
+	gtk_tooltip_set_icon (tooltip, pixbuf);
+
+	if (strcmp (gtk_source_mark_get_category (mark), MARK_TYPE_1) == 0)
+		gtk_tooltip_set_text (tooltip, "Plain text");
+	else
+		gtk_tooltip_set_markup (tooltip, "<b>Rich</b> <i>text</i>");
+
+	return TRUE;
+}
+
 static GtkWidget *
 create_view_window (GtkSourceBuffer *buffer, GtkSourceView *from)
 {
@@ -1329,6 +1346,11 @@ create_view_window (GtkSourceBuffer *buffer, GtkSourceView *from)
 		gtk_source_view_set_mark_category_background (GTK_SOURCE_VIEW (view), MARK_TYPE_1, &color);
 		gtk_source_view_set_mark_category_pixbuf (GTK_SOURCE_VIEW (view), MARK_TYPE_1, pixbuf);
 		gtk_source_view_set_mark_category_priority (GTK_SOURCE_VIEW (view), MARK_TYPE_1, 1);
+		gtk_source_view_set_mark_category_tooltip_func (GTK_SOURCE_VIEW (view),
+								MARK_TYPE_1,
+								mark_tooltip_func,
+								g_object_ref (pixbuf),
+								g_object_unref);
 		g_object_unref (pixbuf);
 	}
 	else
@@ -1346,6 +1368,11 @@ create_view_window (GtkSourceBuffer *buffer, GtkSourceView *from)
 		gtk_source_view_set_mark_category_background (GTK_SOURCE_VIEW (view), MARK_TYPE_2, &color);
 		gtk_source_view_set_mark_category_pixbuf (GTK_SOURCE_VIEW (view), MARK_TYPE_2, pixbuf);
 		gtk_source_view_set_mark_category_priority (GTK_SOURCE_VIEW (view), MARK_TYPE_2, 2);
+		gtk_source_view_set_mark_category_tooltip_func (GTK_SOURCE_VIEW (view),
+								MARK_TYPE_2,
+								mark_tooltip_func,
+								g_object_ref (pixbuf),
+								g_object_unref);
 		g_object_unref (pixbuf);
 	}
 	else
