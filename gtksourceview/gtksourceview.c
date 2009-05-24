@@ -2525,11 +2525,6 @@ mark_category_new (gint priority, GdkPixbuf *pixbuf, GdkPixbuf *tooltip_pixbuf)
 		cat->pixbuf = g_object_ref (pixbuf);
 		cat->tooltip_pixbuf = g_object_ref (tooltip_pixbuf);
 	}
-	else
-	{
-		cat->pixbuf = NULL;
-		cat->tooltip_pixbuf = NULL;
-	}
 
 	return cat;
 }
@@ -2542,6 +2537,7 @@ mark_category_free (MarkCategory *cat)
 		g_object_unref (cat->pixbuf);
 		g_object_unref (cat->tooltip_pixbuf);
 	}
+	g_free (cat->text);
 	g_slice_free (MarkCategory, cat);
 }
 
