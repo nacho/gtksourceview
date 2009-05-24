@@ -133,18 +133,6 @@ a text view which syntax highlighting, undo/redo and text marks. Use a
 @GTK_SOURCE_DRAW_SPACES_NBSP: 
 @GTK_SOURCE_DRAW_SPACES_ALL: 
 
-<!-- ##### USER_FUNCTION GtkSourceViewMarkTooltipFunc ##### -->
-<para>
-Function type for setting up a tooltip for #GtkSourceMark.
-</para>
-
-@mark: the #GtkSourceMark
-@tooltip: the #GtkTooltip object
-@user_data: user data pointer which was passed to gtk_source_view_set_mark_category_tooltip_func()
-@Returns: %TRUE if the tooltip attributes were set and %FALSE otherwise. It has
-the same meaning as the return value of GtkWidget:query-tooltip signal handler.
-
-
 <!-- ##### FUNCTION gtk_source_view_new ##### -->
 <para>
 
@@ -272,26 +260,6 @@ the same meaning as the return value of GtkWidget:query-tooltip signal handler.
 @Returns: 
 
 
-<!-- ##### FUNCTION gtk_source_view_set_mark_category_priority ##### -->
-<para>
-
-</para>
-
-@view:
-@category:
-@priority:
-
-
-<!-- ##### FUNCTION gtk_source_view_get_mark_category_priority ##### -->
-<para>
-
-</para>
-
-@view:
-@category:
-@Returns:
-
-
 <!-- ##### FUNCTION gtk_source_view_set_mark_category_pixbuf ##### -->
 <para>
 
@@ -310,6 +278,16 @@ the same meaning as the return value of GtkWidget:query-tooltip signal handler.
 @view: 
 @category: 
 @Returns: 
+
+
+<!-- ##### FUNCTION gtk_source_view_set_mark_category_text ##### -->
+<para>
+
+</para>
+
+@view: 
+@category: 
+@text: 
 
 
 <!-- ##### FUNCTION gtk_source_view_get_mark_category_background ##### -->

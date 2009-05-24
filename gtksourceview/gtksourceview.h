@@ -184,16 +184,6 @@ gboolean         gtk_source_view_get_mark_category_background
 							 const gchar     *category,
 							 GdkColor        *dest);
 
-typedef gboolean (*GtkSourceViewMarkTooltipFunc)	(GtkSourceMark	*mark,
-							 GtkTooltip	*tooltip,
-							 gpointer	 user_data);
-void             gtk_source_view_set_mark_category_tooltip_func
-							(GtkSourceView   *view,
-							 const gchar     *category,
-							 GtkSourceViewMarkTooltipFunc func,
-							 gpointer	  user_data,
-							 GDestroyNotify   user_data_notify);
-
 void             gtk_source_view_set_mark_category_priority
 							(GtkSourceView   *view,
 							 const gchar     *category,
