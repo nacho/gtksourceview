@@ -1346,11 +1346,7 @@ create_view_window (GtkSourceBuffer *buffer, GtkSourceView *from)
 		gtk_source_view_set_mark_category_background (GTK_SOURCE_VIEW (view), MARK_TYPE_1, &color);
 		gtk_source_view_set_mark_category_pixbuf (GTK_SOURCE_VIEW (view), MARK_TYPE_1, pixbuf);
 		gtk_source_view_set_mark_category_priority (GTK_SOURCE_VIEW (view), MARK_TYPE_1, 1);
-		gtk_source_view_set_mark_category_tooltip_func (GTK_SOURCE_VIEW (view),
-								MARK_TYPE_1,
-								mark_tooltip_func,
-								g_object_ref (pixbuf),
-								g_object_unref);
+		gtk_source_view_set_mark_category_text (GTK_SOURCE_VIEW (view), MARK_TYPE_1, "Mark 1");
 		g_object_unref (pixbuf);
 	}
 	else
@@ -1368,11 +1364,7 @@ create_view_window (GtkSourceBuffer *buffer, GtkSourceView *from)
 		gtk_source_view_set_mark_category_background (GTK_SOURCE_VIEW (view), MARK_TYPE_2, &color);
 		gtk_source_view_set_mark_category_pixbuf (GTK_SOURCE_VIEW (view), MARK_TYPE_2, pixbuf);
 		gtk_source_view_set_mark_category_priority (GTK_SOURCE_VIEW (view), MARK_TYPE_2, 2);
-		gtk_source_view_set_mark_category_tooltip_func (GTK_SOURCE_VIEW (view),
-								MARK_TYPE_2,
-								mark_tooltip_func,
-								g_object_ref (pixbuf),
-								g_object_unref);
+		gtk_source_view_set_mark_category_text (GTK_SOURCE_VIEW (view), MARK_TYPE_2, "Mark 2");
 		g_object_unref (pixbuf);
 	}
 	else
