@@ -153,7 +153,6 @@ typedef struct
 {
 	gint priority;
 	GdkPixbuf *pixbuf;
-	GdkPixbuf *tooltip_pixbuf;
 	gchar *text;
 	GdkColor background;
 	guint background_set : 1;
@@ -238,8 +237,7 @@ static MarkCategory *
 							 const gchar       *name);
 static MarkCategory *
 		mark_category_new			(gint               priority,
-							 GdkPixbuf         *pixbuf,
-							 GdkPixbuf         *tooltip_pixbuf);
+							 GdkPixbuf         *pixbuf);
 static void	mark_category_free			(MarkCategory      *cat);
 
 /* Private functions. */
@@ -2513,7 +2511,7 @@ mark_category_set_background (MarkCategory *cat, const GdkColor *background)
 }
 
 static MarkCategory *
-mark_category_new (gint priority, GdkPixbuf *pixbuf, GdkPixbuf *tooltip_pixbuf)
+mark_category_new (gint priority, GdkPixbuf *pixbuf)
 {
 	MarkCategory *cat;
 
@@ -2523,7 +2521,6 @@ mark_category_new (gint priority, GdkPixbuf *pixbuf, GdkPixbuf *tooltip_pixbuf)
 	if (pixbuf != NULL)
 	{
 		cat->pixbuf = g_object_ref (pixbuf);
-		cat->tooltip_pixbuf = g_object_ref (tooltip_pixbuf);
 	}
 
 	return cat;
@@ -2535,7 +2532,6 @@ mark_category_free (MarkCategory *cat)
 	if (cat->pixbuf)
 	{
 		g_object_unref (cat->pixbuf);
-		g_object_unref (cat->tooltip_pixbuf);
 	}
 	g_free (cat->text);
 	g_slice_free (MarkCategory, cat);
@@ -2570,7 +2566,7 @@ gtk_source_view_ensure_category (GtkSourceView *view,
 
 	if (cat == NULL)
 	{
-		cat = mark_category_new (0, NULL, NULL);
+		cat = mark_category_new (0, NULL);
 		g_hash_table_insert (view->priv->mark_categories,
 				     g_strdup (name),
 				     cat);
@@ -2596,7 +2592,6 @@ gtk_source_view_set_mark_category_pixbuf (GtkSourceView *view,
 					  GdkPixbuf     *pixbuf)
 {
 	MarkCategory *cat;
-	GdkPixbuf *small_pixbuf;
 
 	g_return_if_fail (GTK_IS_SOURCE_VIEW (view));
 	g_return_if_fail (category != NULL);
@@ -2617,47 +2612,39 @@ gtk_source_view_set_mark_category_pixbuf (GtkSourceView *view,
 				width = GUTTER_PIXMAP;
 			if (height > GUTTER_PIXMAP)
 				height = GUTTER_PIXMAP;
-			small_pixbuf = gdk_pixbuf_scale_simple (pixbuf, width, height,
+			pixbuf = gdk_pixbuf_scale_simple (pixbuf, width, height,
 								GDK_INTERP_BILINEAR);
 		}
 		else
 		{
 			/* we own a reference of the pixbuf */
-			small_pixbuf = g_object_ref (pixbuf);
+			g_object_ref (pixbuf);
 		}
-		
-		/* we own a reference of pixbuf for tooltips */
-		g_object_ref (pixbuf);
 
 		if (cat != NULL)
 		{
 			if (cat->pixbuf != NULL)
 			{
 				g_object_unref (cat->pixbuf);
-				g_object_unref (cat->tooltip_pixbuf);
 			}
-			cat->pixbuf = g_object_ref (small_pixbuf);
-			cat->tooltip_pixbuf = g_object_ref (pixbuf);
+			cat->pixbuf = g_object_ref (pixbuf);
 		}
 		else
 		{
-			cat = mark_category_new (0, small_pixbuf, pixbuf);
+			cat = mark_category_new (0, pixbuf);
 			g_hash_table_insert (view->priv->mark_categories,
 					     g_strdup (category),
 					     cat);
 		}
 		
 		g_object_unref (pixbuf);
-		g_object_unref (small_pixbuf);
 	}
 	else
 	{
 		if (cat != NULL && cat->pixbuf != NULL)
 		{
 			g_object_unref (cat->pixbuf);
-			g_object_unref (cat->tooltip_pixbuf);
 			cat->pixbuf = NULL;
-			cat->tooltip_pixbuf = NULL;
 		}
 	}
 
@@ -2687,8 +2674,8 @@ gtk_source_view_get_mark_category_pixbuf (GtkSourceView *view,
 
 	cat = g_hash_table_lookup (view->priv->mark_categories, category);
 	/* we returns the unscaled pixbuf */
-	if (cat != NULL && cat->tooltip_pixbuf != NULL)
-		return g_object_ref (cat->tooltip_pixbuf);
+	if (cat != NULL && cat->pixbuf != NULL)
+		return g_object_ref (cat->pixbuf);
 	else
 		return NULL;
 }
@@ -2752,7 +2739,7 @@ gtk_source_view_set_mark_category_background (GtkSourceView  *view,
 
 	if (color != NULL && cat == NULL)
 	{
-		cat = mark_category_new (0, NULL, NULL);
+		cat = mark_category_new (0, NULL);
 		g_hash_table_insert (view->priv->mark_categories,
 				     g_strdup (category),
 				     cat);
@@ -2826,7 +2813,7 @@ gtk_source_view_set_mark_category_priority (GtkSourceView *view,
 	cat = g_hash_table_lookup (view->priv->mark_categories, category);
 	if (cat == NULL)
 	{
-		cat = mark_category_new (priority, NULL, NULL);
+		cat = mark_category_new (priority, NULL);
 		g_hash_table_insert (view->priv->mark_categories,
 				     g_strdup (category),
 				     cat);
@@ -3548,9 +3535,9 @@ set_tooltip_widget_from_marks (GtkSourceView *view,
 				gtk_box_pack_end (GTK_BOX (hbox), label,
 						  FALSE, FALSE, 0);
 			
-				if (cat->tooltip_pixbuf != NULL)
+				if (cat->pixbuf != NULL)
 				{
-					image = gtk_image_new_from_pixbuf (cat->tooltip_pixbuf);
+					image = gtk_image_new_from_pixbuf (cat->pixbuf);
 					gtk_widget_show (image);
 			
 					gtk_box_pack_start (GTK_BOX (hbox), image,
