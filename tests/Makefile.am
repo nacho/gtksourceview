@@ -26,10 +26,17 @@ test_completion_LDADD = 		\
 	$(DEP_LIBS)			\
 	$(TESTS_LIBS)
 
-UNIT_TEST_PROGS = test-languagemanager
+UNIT_TEST_PROGS = test-languagemanager test-gtksourceview
 test_languagemanager_SOURCES =		\
 	test-languagemanager.c
 test_languagemanager_LDADD = 		\
+	$(top_builddir)/gtksourceview/libgtksourceview-2.0.la \
+	$(DEP_LIBS)			\
+	$(TESTS_LIBS)
+
+test_gtksourceview_SOURCES =		\
+	test-gtksourceview.c
+test_gtksourceview_LDADD = 		\
 	$(top_builddir)/gtksourceview/libgtksourceview-2.0.la \
 	$(DEP_LIBS)			\
 	$(TESTS_LIBS)
